@@ -90,6 +90,10 @@ if ! unzip "$TEMP_DIR/fpc.zip" -d "$TEMP_DIR" ; then
     exit 2
 fi
 
+# Очистка существующих директорий перед установкой
+echo -e "${YELLOW}Очищаю существующие директории...${RESET}"
+rm -rf "$WORK_DIR/FunPayAPI" "$WORK_DIR/Utils" "$WORK_DIR/locales" "$WORK_DIR/tg_bot"
+
 if ! mv "$TEMP_DIR"/*/* "$WORK_DIR/" ; then
     echo -e "${RED}Ошибка при перемещении файлов.${RESET}"
     exit 2
