@@ -91,7 +91,17 @@ unzip -qo "$HOME/fpc.zip" -d "$HOME/fpc-tmp" || {
     exit 1
 }
 
-mv "$HOME"/fpc-tmp/*/* "$HOME/FunPayCardinal" 2>/dev/null || {
+# Получаем имя первой подпапки (например, sidor0912-FunPayCardinal-de5f893)
+FIRST_DIR=$(ls "$HOME/fpc-tmp")
+
+# Проверяем, существует ли подпапка
+if [ -z "$FIRST_DIR" ]; then
+    echo -e "${RED}Неверная структура архива: нет подпапок!${RESET}"
+    exit 1
+fi
+
+# Перемещаем файлы из этой подпапки
+mv "$HOME/fpc-tmp/$FIRST_DIR"/* "$HOME/FunPayCardinal" 2>/dev/null || {
     echo -e "${RED}Неверная структура архива!${RESET}"
     exit 1
 }
@@ -116,7 +126,7 @@ echo -e "${GREEN}Создание ярлыка автозапуска...${RESET}
 SHORTCUTS_DIR="$HOME/.shortcuts"
 mkdir -p "$SHORTCUTS_DIR"
 
-# Создаем скрипт запуска [[8]][[9]]
+# Создаем скрипт запуска
 cat <<EOF > "$SHORTCUTS_DIR/start_fpc.sh"
 #!/data/data/com.termux/files/usr/bin/bash
 if screen -list | grep -q 'fpc'; then
@@ -127,10 +137,10 @@ else
 fi
 EOF
 
-# Устанавливаем права на выполнение [[9]]
+# Устанавливаем права на выполнение
 chmod +x "$SHORTCUTS_DIR/start_fpc.sh"
 
-# Создаем метаданные для виджета [[8]]
+# Создаем метаданные для виджета
 cat <<EOF > "$SHORTCUTS_DIR/start_fpc.json"
 {
   "name": "FunPayCardinal",
