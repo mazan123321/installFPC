@@ -6,9 +6,26 @@ RED='\033[31m'
 CYAN='\033[36m'
 RESET='\033[0m'
 
+# Логирование
+LOG_FILE="/data/data/com.termux/files/home/fpc_install.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo -e "${CYAN}Лог установки записывается в $LOG_FILE${RESET}"
+
 echo -e "${GREEN}"
 echo "Установщик для Termux, создан @exfador, основан на предыдущей версии от @sidor0912${RESET}"
 echo "Запуск с использованием последней версии FunPayCardinal."
+
+# Проверка зависимостей
+check_dependency() {
+  if ! command -v "$1" &> /dev/null; then
+    echo -e "${RED}Необходимый инструмент '$1' не найден. Устанавливаю...${RESET}"
+    pkg install -y "$1"
+  fi
+}
+
+check_dependency curl
+check_dependency jq
+check_dependency unzip
 
 # Создание директории для установки
 username="termuxuser"
@@ -28,7 +45,10 @@ fi
 
 # Загрузка архива
 echo -e "${GREEN}Загружаю последнюю версию FunPayCardinal...${RESET}"
-curl -L "$LOCATION" -o /data/data/com.termux/files/home/fpc-install/fpc.zip
+if ! curl -L "$LOCATION" -o /data/data/com.termux/files/home/fpc-install/fpc.zip; then
+  echo -e "${RED}Ошибка при загрузке архива. Проверьте подключение к интернету.${RESET}"
+  exit 1
+fi
 
 # Распаковка архива
 echo -e "${GREEN}Распаковываю архив...${RESET}"
@@ -42,12 +62,19 @@ mv /data/data/com.termux/files/home/fpc-install/*/* /data/data/com.termux/files/
 
 # Очистка
 rm -rf /data/data/com.termux/files/home/fpc-install
+rm -f /data/data/com.termux/files/home/fpc-install/fpc.zip
 
 # Установка зависимостей
 echo -e "${GREEN}Устанавливаю зависимости...${RESET}"
 pkg install -y curl unzip python jq
 
 # Устанавливаем Python и виртуальное окружение
+PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+if [[ "$PYTHON_VERSION" < "3.8" ]]; then
+  echo -e "${RED}Требуется Python 3.8 или выше. Установите новую версию Python.${RESET}"
+  exit 1
+fi
+
 echo -e "${GREEN}Устанавливаю Python и создаю виртуальное окружение...${RESET}"
 pkg install -y python
 python3 -m venv /data/data/com.termux/files/home/pyvenv
@@ -62,11 +89,14 @@ pip install -r /data/data/com.termux/files/home/FunPayCardinal/requirements.txt
 echo -e "${GREEN}Создаю скрипт автозапуска для Termux Widget...${RESET}"
 echo '#!/data/data/com.termux/files/usr/bin/bash' > /data/data/com.termux/files/home/fpc_start.sh
 echo "source /data/data/com.termux/files/home/pyvenv/bin/activate" >> /data/data/com.termux/files/home/fpc_start.sh
-echo "python /data/data/com.termux/files/home/FunPayCardinal/main.py" >> /data/data/com.termux/files/home/fpc_start.sh
+echo "python /data/data/com.termux/files/home/FunPayCardinal/main.py > /data/data/com.termux/files/home/fpc.log 2>&1" >> /data/data/com.termux/files/home/fpc_start.sh
 chmod +x /data/data/com.termux/files/home/fpc_start.sh
 
 # Инструкция по использованию
 echo -e "${CYAN}################################################################################${RESET}"
 echo -e "${CYAN}FPC успешно установлен и настроен!${RESET}"
-echo -e "${CYAN}Чтобы запустить бота, просто используйте Termux Widget, выбрав fpc_start.sh.${RESET}"
+echo -e "${CYAN}Чтобы запустить бота:${RESET}"
+echo -e "${CYAN}1. Откройте Termux Widget."
+echo -e "${CYAN}2. Выберите скрипт 'fpc_start.sh'."
+echo -e "${CYAN}Логи работы бота будут сохранены в файле 'fpc.log'.${RESET}"
 echo -e "${CYAN}################################################################################${RESET}"
