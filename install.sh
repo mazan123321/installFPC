@@ -1,178 +1,72 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-set -eo pipefail
-trap "echo -e '${RED}Ошибка в строке $LINENO!${RESET}' >&2" ERR
-
-# Цвета
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RED='\033[31m'
 CYAN='\033[36m'
 RESET='\033[0m'
 
-# Приветствие
 echo -e "${GREEN}"
-echo "FunPayCardinal для Termux"
-echo "Оптимизированная версия для устройств без root-прав"
-echo -e "${RESET}"
+echo "Установщик для Termux, создан @exfador, основан на предыдущей версии от @sidor0912${RESET}"
+echo "Запуск с использованием последней версии FunPayCardinal."
 
-# Проверка существующей установки
-if [ -d "$HOME/FunPayCardinal" ]; then
-    read -p "${YELLOW}Директория FunPayCardinal уже существует. Перезаписать? [y/N]: ${RESET}" choice
-    if [[ ! "$choice" =~ ^[Yy] ]]; then
-        echo -e "${RED}Отмена установки!${RESET}"
-        exit 0
-    fi
-    rm -rf "$HOME/FunPayCardinal"
-fi
+# Создание директории для установки
+username="termuxuser"
 
-# Обновление пакетов
-echo -e "${GREEN}Обновление пакетов Termux...${RESET}"
-pkg update -y && pkg upgrade -y
+echo -e "${GREEN}Создаю директорию для установки...${RESET}"
+mkdir -p /data/data/com.termux/files/home/fpc-install
 
-# Проверка интернета
-if ! ping -c 1 github.com &>/dev/null; then
-    echo -e "${RED}Нет интернет-соединения!${RESET}"
-    exit 1
-fi
-
-# Установка необходимых пакетов
-echo -e "${GREEN}Установка пакетов...${RESET}"
-pkg install -y python libxml2 libxslt openssl screen curl unzip jq
-
-# Создание виртуального окружения
-echo -e "${GREEN}Создание виртуального окружения...${RESET}"
-python -m venv "$HOME/pyvenv" || {
-    echo -e "${RED}Ошибка создания виртуального окружения!${RESET}"
-    exit 1
-}
-source "$HOME/pyvenv/bin/activate"
-
-# Обновление pip
-echo -e "${GREEN}Обновление pip...${RESET}"
-pip install --upgrade pip
-
-# Выбор версии
-echo -e "${GREEN}Получение версий FunPayCardinal...${RESET}"
 gh_repo="sidor0912/FunPayCardinal"
-releases=$(curl -sS https://api.github.com/repos/$gh_repo/releases | grep "tag_name" | awk '{print $2}' | sed 's/"//g' | sed 's/,//g')
 
-if [ -n "$releases" ]; then
-  echo -e "${YELLOW}Доступные версии:${RESET}"
-  mapfile -t versions <<< "$releases"
-  for i in "${!versions[@]}"; do
-    echo "$i) ${versions[$i]}"
-  done
-  
-  while true; do
-    read -p "${YELLOW}Выберите версию (номер или 'latest'): ${RESET}" version_choice
-    if [[ "$version_choice" == "latest" || -z "$version_choice" ]]; then
-      LOCATION=$(curl -sS https://api.github.com/repos/$gh_repo/releases/latest | jq -r '.zipball_url')
-      break
-    elif [[ "$version_choice" =~ ^[0-9]+$ ]] && [ "$version_choice" -lt "${#versions[@]}" ]; then
-      LOCATION="https://github.com/$gh_repo/archive/refs/tags/${versions[$version_choice]}.zip"
-      break
-    else
-      echo -e "${RED}Неверный выбор!${RESET}"
-    fi
-  done
-else
-  echo -e "${RED}Не удалось получить версии, использую develop ветку${RESET}"
-  LOCATION="https://github.com/$gh_repo/archive/refs/heads/develop.zip"
+# Получаем ссылку на последнюю версию
+LOCATION=$(curl -sS https://api.github.com/repos/$gh_repo/releases/latest | jq -r '.zipball_url')
+
+if [ -z "$LOCATION" ]; then
+  echo -e "${RED}Не удалось определить URL для загрузки.${RESET}"
+  exit 2
 fi
 
-# Скачивание и распаковка
-echo -e "${GREEN}Загрузка FunPayCardinal...${RESET}"
-curl -L --fail "$LOCATION" -o "$HOME/fpc.zip" || {
-    echo -e "${RED}Ошибка загрузки!${RESET}"
-    exit 1
-}
+# Загрузка архива
+echo -e "${GREEN}Загружаю последнюю версию FunPayCardinal...${RESET}"
+curl -L "$LOCATION" -o /data/data/com.termux/files/home/fpc-install/fpc.zip
 
-unzip -qo "$HOME/fpc.zip" -d "$HOME/fpc-tmp" || {
-    echo -e "${RED}Ошибка распаковки!${RESET}"
-    exit 1
-}
+# Распаковка архива
+echo -e "${GREEN}Распаковываю архив...${RESET}"
+unzip /data/data/com.termux/files/home/fpc-install/fpc.zip -d /data/data/com.termux/files/home/fpc-install
 
-# Находим первую папку внутри fpc-tmp
-FIRST_DIR=$(find "$HOME/fpc-tmp" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+# Создание директории для FunPayCardinal
+mkdir -p /data/data/com.termux/files/home/FunPayCardinal
 
-if [ -z "$FIRST_DIR" ]; then
-    echo -e "${RED}Неверная структура архива: папка не найдена!${RESET}"
-    exit 1
-fi
-
-# Перемещаем файлы из первой найденной папки
-mv "$FIRST_DIR"/* "$HOME/FunPayCardinal" 2>/dev/null || {
-    echo -e "${RED}Ошибка при перемещении файлов!${RESET}"
-    exit 1
-}
-
-# Установка зависимостей
-echo -e "${GREEN}Установка Python-зависимостей...${RESET}"
-REQ_FILE="$HOME/FunPayCardinal/requirements.txt"
-
-if [ -f "$REQ_FILE" ]; then
-  pip install -U -r "$REQ_FILE"
-else
-  echo -e "${YELLOW}requirements.txt не найден, устанавливаю базовые зависимости...${RESET}"
-  pip install -U requests pytelegrambotapi pyyaml aiohttp requests_toolbelt lxml bcrypt beautifulsoup4
-fi
-
-# Первичная настройка
-echo -e "${GREEN}Первичная настройка...${RESET}"
-LANG=en_US.UTF-8 python "$HOME/FunPayCardinal/main.py"
-
-# Создание ярлыка Termux Widget
-echo -e "${GREEN}Создание ярлыка автозапуска...${RESET}"
-SHORTCUTS_DIR="$HOME/.shortcuts"
-mkdir -p "$SHORTCUTS_DIR"
-
-# Создаем скрипт запуска
-cat <<EOF > "$SHORTCUTS_DIR/start_fpc.sh"
-#!/data/data/com.termux/files/usr/bin/bash
-if screen -list | grep -q 'fpc'; then
-    screen -dr fpc
-else
-    screen -dmS fpc bash -c "LANG=en_US.UTF-8 python $HOME/FunPayCardinal/main.py"
-    screen -r fpc
-fi
-EOF
-
-# Устанавливаем права на выполнение
-chmod +x "$SHORTCUTS_DIR/start_fpc.sh"
-
-# Создаем метаданные для виджета
-cat <<EOF > "$SHORTCUTS_DIR/start_fpc.json"
-{
-  "name": "FunPayCardinal",
-  "description": "Запуск/переподключение к боту",
-  "icon": "play-circle",
-  "categories": ["productivity"]
-}
-EOF
-
-# Запуск в screen
-echo -e "${GREEN}Запуск приложения...${RESET}"
-if ! screen -list | grep -q "fpc"; then
-    screen -dmS fpc bash -c "LANG=en_US.UTF-8 python $HOME/FunPayCardinal/main.py"
-else
-    echo -e "${YELLOW}Сессия fpc уже запущена!${RESET}"
-fi
+# Перемещение файлов в нужную директорию
+mv /data/data/com.termux/files/home/fpc-install/*/* /data/data/com.termux/files/home/FunPayCardinal/
 
 # Очистка
-echo -e "${GREEN}Очистка...${RESET}"
-rm -rf "$HOME/fpc-tmp" "$HOME/fpc.zip" "$HOME/.cache/pip"
+rm -rf /data/data/com.termux/files/home/fpc-install
 
+# Установка зависимостей
+echo -e "${GREEN}Устанавливаю зависимости...${RESET}"
+pkg install -y curl unzip python jq
+
+# Устанавливаем Python и виртуальное окружение
+echo -e "${GREEN}Устанавливаю Python и создаю виртуальное окружение...${RESET}"
+pkg install -y python
+python3 -m venv /data/data/com.termux/files/home/pyvenv
+source /data/data/com.termux/files/home/pyvenv/bin/activate
+pip install --upgrade pip
+
+# Устанавливаем зависимости для FunPayCardinal
+echo -e "${GREEN}Устанавливаю зависимости для FunPayCardinal...${RESET}"
+pip install -r /data/data/com.termux/files/home/FunPayCardinal/requirements.txt
+
+# Скрипт для автозапуска через Termux Widget
+echo -e "${GREEN}Создаю скрипт автозапуска для Termux Widget...${RESET}"
+echo '#!/data/data/com.termux/files/usr/bin/bash' > /data/data/com.termux/files/home/fpc_start.sh
+echo "source /data/data/com.termux/files/home/pyvenv/bin/activate" >> /data/data/com.termux/files/home/fpc_start.sh
+echo "python /data/data/com.termux/files/home/FunPayCardinal/main.py" >> /data/data/com.termux/files/home/fpc_start.sh
+chmod +x /data/data/com.termux/files/home/fpc_start.sh
+
+# Инструкция по использованию
 echo -e "${CYAN}################################################################################${RESET}"
-echo -e "${CYAN}Установка завершена!${RESET}"
-echo -e "${CYAN}Для управления сессией:${RESET}"
-echo -e "Запустить:  ${CYAN}screen -r fpc${RESET}"
-echo -e "Остановить: ${CYAN}Ctrl+A D${RESET}"
-echo -e "Список:     ${CYAN}screen -ls${RESET}"
-echo -e "${CYAN}Не забудьте настроить config.yml!${RESET}"
-echo -e ""
-echo -e "${CYAN}Добавлен ярлык Termux Widget!${RESET}"
-echo -e "1. Установите Termux:Widget из F-Droid"
-echo -e "2. Добавьте виджет на главный экран"
-echo -e "3. Выберите 'FunPayCardinal' в списке виджетов"
+echo -e "${CYAN}FPC успешно установлен и настроен!${RESET}"
+echo -e "${CYAN}Чтобы запустить бота, просто используйте Termux Widget, выбрав fpc_start.sh.${RESET}"
 echo -e "${CYAN}################################################################################${RESET}"
