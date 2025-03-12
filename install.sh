@@ -68,11 +68,14 @@ rm -f /data/data/com.termux/files/home/fpc-install/fpc.zip
 echo -e "${GREEN}Устанавливаю зависимости...${RESET}"
 pkg install -y curl unzip python jq
 
-# Устанавливаем Python и виртуальное окружение
-PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
-if [[ "$PYTHON_VERSION" < "3.8" ]]; then
+
+# Проверка версии Python
+PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+if (( $(echo "$PYTHON_VERSION < 3.8" | bc -l) )); then
   echo -e "${RED}Требуется Python 3.8 или выше. Установите новую версию Python.${RESET}"
   exit 1
+else
+  echo -e "${GREEN}Обнаружена подходящая версия Python: $PYTHON_VERSION${RESET}"
 fi
 
 echo -e "${GREEN}Устанавливаю Python и создаю виртуальное окружение...${RESET}"
