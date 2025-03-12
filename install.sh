@@ -3,15 +3,17 @@
 set -eo pipefail
 trap "echo -e '${RED}Ошибка в строке $LINENO!${RESET}' >&2" ERR
 
+# Цвета
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RED='\033[31m'
 CYAN='\033[36m'
 RESET='\033[0m'
 
+# Приветствие
 echo -e "${GREEN}"
 echo "FunPayCardinal для Termux"
-echo "Оптимизированная версия от @mazanО1"
+echo "Оптимизированная версия для устройств без root-прав"
 echo -e "${RESET}"
 
 # Проверка существующей установки
@@ -34,11 +36,11 @@ if ! ping -c 1 github.com &>/dev/null; then
     exit 1
 fi
 
-# Установка зависимостей
+# Установка необходимых пакетов
 echo -e "${GREEN}Установка пакетов...${RESET}"
 pkg install -y python libxml2 libxslt openssl screen curl unzip jq
 
-# Виртуальное окружение
+# Создание виртуального окружения
 echo -e "${GREEN}Создание виртуального окружения...${RESET}"
 python -m venv "$HOME/pyvenv" || {
     echo -e "${RED}Ошибка создания виртуального окружения!${RESET}"
@@ -48,12 +50,12 @@ source "$HOME/pyvenv/bin/activate"
 
 # Обновление pip
 echo -e "${GREEN}Обновление pip...${RESET}"
-python -m pip install --upgrade pip
+pip install --upgrade pip
 
 # Выбор версии
-echo -e "${GREEN}Получение версий...${RESET}"
+echo -e "${GREEN}Получение версий FunPayCardinal...${RESET}"
 gh_repo="sidor0912/FunPayCardinal"
-releases=$(curl -sS --fail https://api.github.com/repos/$gh_repo/releases | grep "tag_name" | awk '{print $2}' | sed 's/"//g' | sed 's/,//g')
+releases=$(curl -sS https://api.github.com/repos/$gh_repo/releases | grep "tag_name" | awk '{print $2}' | sed 's/"//g' | sed 's/,//g')
 
 if [ -n "$releases" ]; then
   echo -e "${YELLOW}Доступные версии:${RESET}"
@@ -65,7 +67,7 @@ if [ -n "$releases" ]; then
   while true; do
     read -p "${YELLOW}Выберите версию (номер или 'latest'): ${RESET}" version_choice
     if [[ "$version_choice" == "latest" || -z "$version_choice" ]]; then
-      LOCATION=$(curl -sS --fail https://api.github.com/repos/$gh_repo/releases/latest | jq -r '.zipball_url')
+      LOCATION=$(curl -sS https://api.github.com/repos/$gh_repo/releases/latest | jq -r '.zipball_url')
       break
     elif [[ "$version_choice" =~ ^[0-9]+$ ]] && [ "$version_choice" -lt "${#versions[@]}" ]; then
       LOCATION="https://github.com/$gh_repo/archive/refs/tags/${versions[$version_choice]}.zip"
@@ -91,17 +93,19 @@ unzip -qo "$HOME/fpc.zip" -d "$HOME/fpc-tmp" || {
     exit 1
 }
 
-# Проверяем структуру архива
-if [ -d "$HOME/fpc-tmp/FunPayCardinal-main" ]; then
-    # Перемещаем файлы из папки FunPayCardinal-main
-    mv "$HOME/fpc-tmp/FunPayCardinal-main"/* "$HOME/FunPayCardinal" 2>/dev/null || {
-        echo -e "${RED}Ошибка при перемещении файлов!${RESET}"
-        exit 1
-    }
-else
-    echo -e "${RED}Неверная структура архива: папка FunPayCardinal-main не найдена!${RESET}"
+# Находим первую папку внутри fpc-tmp
+FIRST_DIR=$(find "$HOME/fpc-tmp" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+
+if [ -z "$FIRST_DIR" ]; then
+    echo -e "${RED}Неверная структура архива: папка не найдена!${RESET}"
     exit 1
 fi
+
+# Перемещаем файлы из первой найденной папки
+mv "$FIRST_DIR"/* "$HOME/FunPayCardinal" 2>/dev/null || {
+    echo -e "${RED}Ошибка при перемещении файлов!${RESET}"
+    exit 1
+}
 
 # Установка зависимостей
 echo -e "${GREEN}Установка Python-зависимостей...${RESET}"
@@ -114,7 +118,7 @@ else
   pip install -U requests pytelegrambotapi pyyaml aiohttp requests_toolbelt lxml bcrypt beautifulsoup4
 fi
 
-# Первоначальная настройка
+# Первичная настройка
 echo -e "${GREEN}Первичная настройка...${RESET}"
 LANG=en_US.UTF-8 python "$HOME/FunPayCardinal/main.py"
 
