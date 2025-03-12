@@ -91,20 +91,17 @@ unzip -qo "$HOME/fpc.zip" -d "$HOME/fpc-tmp" || {
     exit 1
 }
 
-# Получаем имя первой подпапки (например, sidor0912-FunPayCardinal-de5f893)
-FIRST_DIR=$(ls "$HOME/fpc-tmp")
-
-# Проверяем, существует ли подпапка
-if [ -z "$FIRST_DIR" ]; then
-    echo -e "${RED}Неверная структура архива: нет подпапок!${RESET}"
+# Проверяем структуру архива
+if [ -d "$HOME/fpc-tmp/FunPayCardinal-main" ]; then
+    # Перемещаем файлы из папки FunPayCardinal-main
+    mv "$HOME/fpc-tmp/FunPayCardinal-main"/* "$HOME/FunPayCardinal" 2>/dev/null || {
+        echo -e "${RED}Ошибка при перемещении файлов!${RESET}"
+        exit 1
+    }
+else
+    echo -e "${RED}Неверная структура архива: папка FunPayCardinal-main не найдена!${RESET}"
     exit 1
 fi
-
-# Перемещаем файлы из этой подпапки
-mv "$HOME/fpc-tmp/$FIRST_DIR"/* "$HOME/FunPayCardinal" 2>/dev/null || {
-    echo -e "${RED}Неверная структура архива!${RESET}"
-    exit 1
-}
 
 # Установка зависимостей
 echo -e "${GREEN}Установка Python-зависимостей...${RESET}"
